@@ -5,9 +5,13 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"math"
 	"math/big"
+	"sort"
 )
 
 var (
@@ -25,6 +29,7 @@ var (
 	bb         = flag.String("b", "3", "number series parameter")
 	arithmetic = flag.Bool("arithmetic", false, "use arithmetic integers for series")
 	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
+	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -61,6 +66,59 @@ func geometricSeries() []big.Int {
 	for i := range series {
 		x := &series[i]
 		x.SetInt64(int64(i)).Exp(b, x, nil).Mul(a, x)
+	}
+	return series
+}
+
+type Element struct {
+	Name         string  `json:"name"`
+	Appearance   string  `json:"appearance"`
+	AtomicMass   float64 `json:"atomic_mass"`
+	Boil         float64 `json:"boil"`
+	Category     string  `json:"category"`
+	Color        string  `json:"color"`
+	Density      float64 `json:"density"`
+	DiscoveredBy string  `json:"discovered_by"`
+	Melt         float64 `json:"melt"`
+	MolarHeat    float64 `json:"molar_heat"`
+	NamedBy      string  `json:"named_by"`
+	Number       int     `json:"number"`
+	Period       int     `json:"period"`
+	Phase        string  `json:"phase"`
+	Source       string  `json:"source"`
+	SpectralImg  string  `json:"spectral_img"`
+	Summary      string  `json:"summary"`
+	Symbol       string  `json:"symbol"`
+	XPos         int     `json:"xpos"`
+	YPos         int     `json:"ypos"`
+	Shells       []int   `json:"shells"`
+}
+
+type Elements struct {
+	Elements []Element `json:"elements"`
+}
+
+func atomicSeries() []big.Int {
+	series, elements, neutrons := make([]big.Int, 0, 256), Elements{}, make(map[int]bool)
+	data, err := ioutil.ReadFile("./PeriodicTableJSON.json")
+	if err != nil {
+		panic(err)
+	}
+	err = json.Unmarshal(data, &elements)
+	if err != nil {
+		panic(err)
+	}
+	for _, element := range elements.Elements {
+		n := int(math.Round(element.AtomicMass)) - element.Number
+		neutrons[n] = true
+	}
+	sorted := make([]int, 0, len(neutrons))
+	for n := range neutrons {
+		sorted = append(sorted, n)
+	}
+	sort.Ints(sorted)
+	for _, n := range sorted {
+		series = append(series, *big.NewInt(int64(n)))
 	}
 	return series
 }
@@ -111,6 +169,14 @@ func main() {
 	}
 	if *geometric {
 		series := geometricSeries()
+		for _, item := range series {
+			fmt.Println(&item)
+		}
+		sumProductTest(series)
+		return
+	}
+	if *atomic {
+		series := atomicSeries()
 		for _, item := range series {
 			fmt.Println(&item)
 		}
