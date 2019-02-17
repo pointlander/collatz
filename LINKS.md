@@ -8,3 +8,5 @@ https://www.quantamagazine.org/the-sum-product-problem-shows-how-addition-and-mu
 # A json of the entire periodic table.
 https://github.com/Bowserinator/Periodic-Table-JSON  
 
+# The On-Line Encyclopedia of Integer Sequences
+https://oeis.org/  
