@@ -5,13 +5,18 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"math/big"
+	"os"
+	"runtime"
 	"sort"
+	"strings"
 )
 
 var (
@@ -30,6 +35,7 @@ var (
 	arithmetic = flag.Bool("arithmetic", false, "use arithmetic integers for series")
 	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
 	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
+	oeis       = flag.Bool("oeis", false, "search through oeis")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -123,7 +129,100 @@ func atomicSeries() []big.Int {
 	return series
 }
 
-func sumProductTest(series []big.Int) {
+func oeisSerach() {
+	size := runtime.NumCPU() * 2
+	type Series struct {
+		Name   string
+		Series []string
+		Score  float64
+	}
+	results := make(chan Series, size)
+	test := func(series Series) {
+		unique := make(map[string]bool, len(series.Series))
+		for _, number := range series.Series {
+			unique[number] = true
+		}
+
+		integers, i := make([]big.Int, len(unique)), 0
+		for number := range unique {
+			_, ok := integers[i].SetString(number, 10)
+			if !ok {
+				panic("invalid number: " + number)
+			}
+			i++
+		}
+		sumScore, productScore := sumProductTest(integers)
+		series.Score = math.Sqrt(sumScore*sumScore + productScore*productScore)
+		results <- series
+	}
+
+	file, err := os.Open("oeis/stripped.gz")
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+	decoder, err := gzip.NewReader(file)
+	if err != nil {
+		panic(err)
+	}
+	defer decoder.Close()
+	reader := bufio.NewReader(decoder)
+	getSeries := func() (series Series, err error) {
+		s, err := reader.ReadString('\n')
+		if err != nil || strings.HasPrefix(s, "#") {
+			return
+		}
+		s = strings.TrimRight(s, "\n")
+		line := strings.Split(s, " ")
+		if len(line) != 2 {
+			panic("invalid file format")
+		}
+		series.Name = line[0]
+		csv := strings.TrimRight(strings.TrimLeft(line[1], ","), ",")
+		series.Series = strings.Split(csv, ",")
+		return
+	}
+
+	i, series := 0, Series{}
+	for i < size {
+		series, err = getSeries()
+		if series.Name == "" {
+			continue
+		}
+		if err != nil {
+			break
+		}
+		go test(series)
+		i++
+	}
+
+	min, name := 1.0, ""
+	for err == nil {
+		series = <-results
+		i--
+		if series.Score < min {
+			fmt.Println(series.Score, series.Name, series.Series)
+			min, name = series.Score, series.Name
+		}
+		series, err = getSeries()
+		if err == nil {
+			i++
+			go test(series)
+		}
+	}
+
+	for j := 0; j < i; j++ {
+		series = <-results
+		if series.Score < min {
+			fmt.Println(series.Score, series.Name, series.Series)
+			min, name = series.Score, series.Name
+		}
+	}
+
+	fmt.Println("min", min, name)
+}
+
+func sumProductTest(series []big.Int) (float64, float64) {
 	length := len(series)
 	sums, products := make(map[string]int, length*length), make(map[string]int, length*length)
 	for _, x := range series {
@@ -136,7 +235,11 @@ func sumProductTest(series []big.Int) {
 		}
 	}
 	max := (length * (length + 1)) / 2
-	fmt.Println(max, float64(len(sums))/float64(max), float64(len(products))/float64(max))
+	sumScore, productScore := float64(len(sums))/float64(max), float64(len(products))/float64(max)
+	if !*oeis {
+		fmt.Println(max, sumScore, productScore)
+	}
+	return sumScore, productScore
 }
 
 func main() {
@@ -181,6 +284,10 @@ func main() {
 			fmt.Println(&item)
 		}
 		sumProductTest(series)
+		return
+	}
+	if *oeis {
+		oeisSerach()
 		return
 	}
 
