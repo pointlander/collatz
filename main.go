@@ -238,7 +238,8 @@ func oeisSearch() {
 	fmt.Fprintf(out, "| Name | Score | Sum | Product | Numbers |\n")
 	fmt.Fprintf(out, "| ---- | ----- | --- | ------- | ------- |\n")
 	for _, series := range sorted {
-		fmt.Fprintf(out, "| %s | %f | %f | %f | %v |\n", series.Name, series.Score, series.Sum, series.Product, series.Series)
+		fmt.Fprintf(out, "| [%s](https://oeis.org/%s) | %f | %f | %f | %v |\n", 
+			series.Name, series.Name, series.Score, series.Sum, series.Product, series.Series)
 	}
 }
 
