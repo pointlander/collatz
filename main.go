@@ -10,12 +10,15 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/big"
+	"net/http"
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -129,7 +132,55 @@ func atomicSeries() []big.Int {
 	return series
 }
 
+func fetch(url, name string) {
+	head, err := http.Head(url)
+	if err != nil {
+		panic(err)
+	}
+	size, err := strconv.Atoi(head.Header.Get("Content-Length"))
+	if err != nil {
+		panic(err)
+	}
+	last, err := http.ParseTime(head.Header.Get("Last-Modified"))
+	if err != nil {
+		panic(err)
+	}
+	head.Body.Close()
+	stat, err := os.Stat("./" + name)
+	if err != nil || stat.ModTime().Before(last) || stat.Size() != int64(size) {
+		fmt.Println("downloading", url, "->", name, size, last)
+		response, err := http.Get(url)
+		if err != nil {
+			panic(err)
+		}
+
+		out, err := os.Create("./" + name)
+		if err != nil {
+			panic(err)
+		}
+
+		_, err = io.Copy(out, response.Body)
+		if err != nil {
+			panic(err)
+		}
+		response.Body.Close()
+		out.Close()
+
+		err = os.Chtimes("./"+name, last, last)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("done downloading", url, "->", name, size, last)
+
+		return
+	}
+
+	fmt.Println("skipping", url, "->", name, size, last)
+}
+
 func oeisSearch() {
+	fetch("https://oeis.org/stripped.gz", "stripped.gz")
+
 	type Series struct {
 		Name                string
 		Series              []string
@@ -174,7 +225,7 @@ func oeisSearch() {
 		results <- series
 	}
 
-	file, err := os.Open("oeis/stripped.gz")
+	file, err := os.Open("./stripped.gz")
 	if err != nil {
 		panic(err)
 	}
@@ -238,7 +289,7 @@ func oeisSearch() {
 	fmt.Fprintf(out, "| Name | Score | Sum | Product | Numbers |\n")
 	fmt.Fprintf(out, "| ---- | ----- | --- | ------- | ------- |\n")
 	for _, series := range sorted {
-		fmt.Fprintf(out, "| [%s](https://oeis.org/%s) | %f | %f | %f | %v |\n", 
+		fmt.Fprintf(out, "| [%s](https://oeis.org/%s) | %f | %f | %f | %v |\n",
 			series.Name, series.Name, series.Score, series.Sum, series.Product, series.Series)
 	}
 }
