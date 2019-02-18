@@ -129,13 +129,29 @@ func atomicSeries() []big.Int {
 	return series
 }
 
-func oeisSerach() {
-	size := runtime.NumCPU() * 2
+func oeisSearch() {
 	type Series struct {
-		Name   string
-		Series []string
-		Score  float64
+		Name                string
+		Series              []string
+		Score, Sum, Product float64
 	}
+	var sorted [256]Series
+	for i := range sorted {
+		sorted[i].Score = math.Sqrt2
+	}
+	add := func(series Series) {
+		for i, a := range sorted {
+			if series.Score < a.Score {
+				sorted[i] = series
+				for j, b := range sorted[i+1:] {
+					a, sorted[j+i+1] = b, a
+				}
+				break
+			}
+		}
+	}
+
+	size := runtime.NumCPU() * 2
 	results := make(chan Series, size)
 	test := func(series Series) {
 		unique := make(map[string]bool, len(series.Series))
@@ -153,6 +169,8 @@ func oeisSerach() {
 		}
 		sumScore, productScore := sumProductTest(integers)
 		series.Score = math.Sqrt(sumScore*sumScore + productScore*productScore)
+		series.Sum = sumScore
+		series.Product = productScore
 		results <- series
 	}
 
@@ -196,14 +214,10 @@ func oeisSerach() {
 		i++
 	}
 
-	min, name := 1.0, ""
 	for err == nil {
 		series = <-results
 		i--
-		if series.Score < min {
-			fmt.Println(series.Score, series.Name, series.Series)
-			min, name = series.Score, series.Name
-		}
+		add(series)
 		series, err = getSeries()
 		if err == nil {
 			i++
@@ -213,13 +227,19 @@ func oeisSerach() {
 
 	for j := 0; j < i; j++ {
 		series = <-results
-		if series.Score < min {
-			fmt.Println(series.Score, series.Name, series.Series)
-			min, name = series.Score, series.Name
-		}
+		add(series)
 	}
 
-	fmt.Println("min", min, name)
+	out, err := os.Create("README.md")
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	fmt.Fprintf(out, "| Name | Score | Sum | Product | Numbers |\n")
+	fmt.Fprintf(out, "| ---- | ----- | --- | ------- | ------- |\n")
+	for _, series := range sorted {
+		fmt.Fprintf(out, "| %s | %f | %f | %f | %v |\n", series.Name, series.Score, series.Sum, series.Product, series.Series)
+	}
 }
 
 func sumProductTest(series []big.Int) (float64, float64) {
@@ -287,7 +307,7 @@ func main() {
 		return
 	}
 	if *oeis {
-		oeisSerach()
+		oeisSearch()
 		return
 	}
 
