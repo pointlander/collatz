@@ -14,6 +14,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"math/rand"
 	"net/http"
 	"os"
 	"runtime"
@@ -38,6 +39,7 @@ var (
 	arithmetic = flag.Bool("arithmetic", false, "use arithmetic integers for series")
 	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
 	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
+	random     = flag.Bool("random", false, "use random numbers for series")
 	oeis       = flag.Bool("oeis", false, "search through oeis")
 )
 
@@ -128,6 +130,19 @@ func atomicSeries() []big.Int {
 	sort.Ints(sorted)
 	for _, n := range sorted {
 		series = append(series, *big.NewInt(int64(n)))
+	}
+	return series
+}
+
+func randomSeries() []big.Int {
+	series, rnd, dupe := make([]big.Int, 256), rand.New(rand.NewSource(1)), make(map[uint64]bool)
+	for i := range series {
+		number := rnd.Uint64()
+		for dupe[number] {
+			number = rnd.Uint64()
+		}
+		dupe[number] = true
+		series[i].SetUint64(number)
 	}
 	return series
 }
@@ -352,6 +367,14 @@ func main() {
 	}
 	if *atomic {
 		series := atomicSeries()
+		for _, item := range series {
+			fmt.Println(&item)
+		}
+		sumProductTest(series)
+		return
+	}
+	if *random {
+		series := randomSeries()
 		for _, item := range series {
 			fmt.Println(&item)
 		}
