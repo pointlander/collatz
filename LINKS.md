@@ -10,3 +10,6 @@ https://github.com/Bowserinator/Periodic-Table-JSON
 
 # The On-Line Encyclopedia of Integer Sequences
 https://oeis.org/  
+
+# Evolutionary optimization library for Go  
+https://github.com/MaxHalford/eaopt
