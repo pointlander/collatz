@@ -40,6 +40,7 @@ var (
 	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
 	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
 	random     = flag.Bool("random", false, "use random numbers for series")
+	seven = flag.Bool("seven", false, "use seven smooth series")
 	oeis       = flag.Bool("oeis", false, "search through oeis")
 )
 
@@ -309,6 +310,29 @@ func oeisSearch() {
 	}
 }
 
+var primes = [...]int{2, 3, 5, 7}
+func sevenSmoothSeries(size int) []big.Int {
+	series := make([]big.Int, 0, size)
+	isSmooth := func(number int) bool {
+		for _, p := range primes {
+			for number % p == 0 {
+				number /= p
+			}
+		}
+		return number == 1
+	}
+	i := 1
+	for len(series) < size {
+		if isSmooth(i) {
+			smooth := big.Int{}
+			smooth.SetInt64(int64(i))
+			series = append(series, smooth)
+		}
+		i++
+	}
+	return series
+}
+
 func sumProductTest(series []big.Int) (float64, float64) {
 	length := len(series)
 	sums, products := make(map[string]int, length*length), make(map[string]int, length*length)
@@ -323,7 +347,7 @@ func sumProductTest(series []big.Int) (float64, float64) {
 	}
 	max := (length * (length + 1)) / 2
 	sumScore, productScore := float64(len(sums))/float64(max), float64(len(products))/float64(max)
-	if !*oeis {
+	if !*oeis && !*seven {
 		fmt.Println(max, sumScore, productScore)
 	}
 	return sumScore, productScore
@@ -383,6 +407,19 @@ func main() {
 	}
 	if *oeis {
 		oeisSearch()
+		return
+	}
+	if *seven {
+		series := sevenSmoothSeries(100)
+		for _, number := range series {
+			fmt.Printf(" %s", number.String())
+		}
+		fmt.Printf("\n")
+		for i := 1; i < 1024; i++ {
+			series = sevenSmoothSeries(i)
+			sum, product := sumProductTest(series)
+			fmt.Println(i, sum, product, math.Sqrt(sum*sum + product*product))
+		}
 		return
 	}
 
