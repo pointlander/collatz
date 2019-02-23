@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/MaxHalford/eaopt"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
@@ -47,6 +48,7 @@ var (
 	random     = flag.Bool("random", false, "use random numbers for series")
 	seven      = flag.Bool("seven", false, "use seven smooth series")
 	oeis       = flag.Bool("oeis", false, "search through oeis")
+	search = flag.Bool("search", false, "search for series")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -341,6 +343,28 @@ func sevenSmoothSeries(size int) []big.Int {
 	return series
 }
 
+func searchSeries() {
+	ga, err := eaopt.NewDefaultGAConfig().NewGA()
+	if err != nil {
+		panic(err)
+	}
+
+	ga.NGenerations = 100
+	ga.RNG = rand.New(rand.NewSource(1))
+	ga.ParallelEval = true
+	ga.PopSize = 100
+
+	ga.Callback = func(ga *eaopt.GA) {
+		fmt.Printf("Best fitness at generation %d: %f\n", ga.Generations, ga.HallOfFame[0].Fitness)
+		fmt.Println(ga.HallOfFame[0].Genome.(BoolSlice).String())
+	}
+
+	err = ga.Minimize(BoolSliceFactory)
+	if err != nil {
+		panic(err)
+	}
+}
+
 func sumProductTest(series []big.Int) (float64, float64) {
 	length := len(series)
 	sums, products := make(map[string]int, length*length), make(map[string]int, length*length)
@@ -355,7 +379,7 @@ func sumProductTest(series []big.Int) (float64, float64) {
 	}
 	max := (length * (length + 1)) / 2
 	sumScore, productScore := float64(len(sums))/float64(max), float64(len(products))/float64(max)
-	if !*oeis && !*seven {
+	if !*oeis && !*seven && !*search {
 		fmt.Println(max, sumScore, productScore)
 	}
 	return sumScore, productScore
@@ -459,6 +483,10 @@ func main() {
 			panic(err)
 		}
 
+		return
+	}
+	if *search {
+		searchSeries()
 		return
 	}
 
