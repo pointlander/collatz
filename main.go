@@ -21,6 +21,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 )
 
 var (
@@ -40,7 +45,7 @@ var (
 	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
 	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
 	random     = flag.Bool("random", false, "use random numbers for series")
-	seven = flag.Bool("seven", false, "use seven smooth series")
+	seven      = flag.Bool("seven", false, "use seven smooth series")
 	oeis       = flag.Bool("oeis", false, "search through oeis")
 )
 
@@ -208,7 +213,7 @@ func oeisSearch() {
 	}
 	add := func(series Series) {
 		for i, a := range sorted {
-			if series.Score < a.Score {
+			if series.Score < a.Score || (series.Score == a.Score && strings.Compare(series.Name, a.Name) < 0) {
 				sorted[i] = series
 				for j, b := range sorted[i+1:] {
 					a, sorted[j+i+1] = b, a
@@ -302,6 +307,8 @@ func oeisSearch() {
 		panic(err)
 	}
 	defer out.Close()
+	fmt.Fprintf(out, "Score for seven smooth series, A002473, of different sizes:\n")
+	fmt.Fprintf(out, "![seven smooth scores](sevenSmooth.png?raw=true)\n\n")
 	fmt.Fprintf(out, "| Name | Score | Sum | Product | Numbers |\n")
 	fmt.Fprintf(out, "| ---- | ----- | --- | ------- | ------- |\n")
 	for _, series := range sorted {
@@ -311,11 +318,12 @@ func oeisSearch() {
 }
 
 var primes = [...]int{2, 3, 5, 7}
+
 func sevenSmoothSeries(size int) []big.Int {
 	series := make([]big.Int, 0, size)
 	isSmooth := func(number int) bool {
 		for _, p := range primes {
-			for number % p == 0 {
+			for number%p == 0 {
 				number /= p
 			}
 		}
@@ -415,11 +423,42 @@ func main() {
 			fmt.Printf(" %s", number.String())
 		}
 		fmt.Printf("\n")
-		for i := 1; i < 1024; i++ {
+
+		points, minSize, minScore := make(plotter.XYs, 0, 256), 0, math.Sqrt2
+		for i := 1; i < 256; i++ {
 			series = sevenSmoothSeries(i)
 			sum, product := sumProductTest(series)
-			fmt.Println(i, sum, product, math.Sqrt(sum*sum + product*product))
+			score := math.Sqrt(sum*sum + product*product)
+			if score < minScore {
+				minSize, minScore = i, score
+			}
+			points = append(points, plotter.XY{X: float64(i), Y: score})
+			fmt.Println(i, sum, product, score)
 		}
+		fmt.Println(minSize, minScore)
+
+		p, err := plot.New()
+		if err != nil {
+			panic(err)
+		}
+
+		p.Title.Text = "score vs size for seven smooth numbers"
+		p.X.Label.Text = "size"
+		p.Y.Label.Text = "score"
+
+		s, err := plotter.NewScatter(points)
+		if err != nil {
+			panic(err)
+		}
+		s.GlyphStyle.Radius = vg.Length(1)
+		s.GlyphStyle.Shape = draw.CircleGlyph{}
+		p.Add(s)
+
+		err = p.Save(8*vg.Inch, 8*vg.Inch, "sevenSmooth.png")
+		if err != nil {
+			panic(err)
+		}
+
 		return
 	}
 
