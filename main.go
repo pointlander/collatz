@@ -366,6 +366,98 @@ func sevenSmoothComplementSeries(size int) []big.Int {
 	return series
 }
 
+type Source struct {
+	Generate  func(size int) []big.Int
+	Key, Nice string
+}
+
+var Registry = map[string]Source{
+	"sevenSmooth": {
+		Generate: sevenSmoothSeries,
+		Key:      "sevenSmooth",
+		Nice:     "seven smooth",
+	},
+	"sevenSmoothComplement": {
+		Generate: sevenSmoothComplementSeries,
+		Key:      "sevenSmoothComplement",
+		Nice:     "seven smooth complement",
+	},
+}
+
+func (s Source) graph(max int) {
+	type Result struct {
+		Score, Sum, Product float64
+		Size                int
+	}
+	cores := runtime.NumCPU() * 2
+	results := make(chan Result, cores)
+	sample := func(size int) {
+		series := s.Generate(size)
+		sum, product := sumProductTest(series)
+		results <- Result{
+			Score:   math.Sqrt(sum*sum + product*product),
+			Sum:     sum,
+			Product: product,
+			Size:    size,
+		}
+	}
+
+	points, minSize, minScore := make(plotter.XYs, 0, max), 0, math.Sqrt2
+	i, j := 1, 0
+	for j < cores && i < max {
+		go sample(i)
+		j++
+		i++
+	}
+
+	for i < max {
+		result := <-results
+		j--
+		if result.Score < minScore {
+			minSize, minScore = result.Size, result.Score
+		}
+		points = append(points, plotter.XY{X: float64(result.Size), Y: result.Score})
+		fmt.Println(result.Size, result.Sum, result.Product, result.Score)
+		go sample(i)
+		j++
+		i++
+	}
+
+	for j > 0 {
+		result := <-results
+		j--
+		if result.Score < minScore {
+			minSize, minScore = result.Size, result.Score
+		}
+		points = append(points, plotter.XY{X: float64(result.Size), Y: result.Score})
+		fmt.Println(result.Size, result.Sum, result.Product, result.Score)
+
+	}
+	fmt.Println(minSize, minScore)
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = fmt.Sprintf("score vs size for %s numbers", s.Nice)
+	p.X.Label.Text = "size"
+	p.Y.Label.Text = "score"
+
+	scatter, err := plotter.NewScatter(points)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("%s.png", s.Key))
+	if err != nil {
+		panic(err)
+	}
+}
+
 func searchSeries() {
 	ga, err := eaopt.NewDefaultGAConfig().NewGA()
 	if err != nil {
@@ -471,51 +563,19 @@ func main() {
 		}
 		fmt.Printf("\n")
 
-		points, minSize, minScore := make(plotter.XYs, 0, 256), 0, math.Sqrt2
-		for i := 1; i < 256; i++ {
-			series = sevenSmoothSeries(i)
-			sum, product := sumProductTest(series)
-			score := math.Sqrt(sum*sum + product*product)
-			if score < minScore {
-				minSize, minScore = i, score
-			}
-			points = append(points, plotter.XY{X: float64(i), Y: score})
-			fmt.Println(i, sum, product, score)
-		}
-		fmt.Println(minSize, minScore)
-
-		p, err := plot.New()
-		if err != nil {
-			panic(err)
-		}
-
-		p.Title.Text = "score vs size for seven smooth numbers"
-		p.X.Label.Text = "size"
-		p.Y.Label.Text = "score"
-
-		s, err := plotter.NewScatter(points)
-		if err != nil {
-			panic(err)
-		}
-		s.GlyphStyle.Radius = vg.Length(1)
-		s.GlyphStyle.Shape = draw.CircleGlyph{}
-		p.Add(s)
-
-		err = p.Save(8*vg.Inch, 8*vg.Inch, "sevenSmooth.png")
-		if err != nil {
-			panic(err)
-		}
-
+		Registry["sevenSmooth"].graph(256)
 		return
 	}
 	if *sevenComp {
-		series := sevenSmoothComplementSeries(512)
+		series := sevenSmoothComplementSeries(1024)
 		for _, number := range series {
 			fmt.Printf(" %s", number.String())
 		}
 		fmt.Printf("\n")
 		sum, product := sumProductTest(series)
-		fmt.Println(sum*sum + product*product)
+		fmt.Println(math.Sqrt(sum*sum + product*product))
+
+		Registry["sevenSmoothComplement"].graph(512)
 		return
 	}
 	if *search {
