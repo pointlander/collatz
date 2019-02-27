@@ -47,8 +47,9 @@ var (
 	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
 	random     = flag.Bool("random", false, "use random numbers for series")
 	seven      = flag.Bool("seven", false, "use seven smooth series")
+	sevenComp  = flag.Bool("sevenComp", false, "use seven smooth complement series")
 	oeis       = flag.Bool("oeis", false, "search through oeis")
-	search = flag.Bool("search", false, "search for series")
+	search     = flag.Bool("search", false, "search for series")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -343,6 +344,28 @@ func sevenSmoothSeries(size int) []big.Int {
 	return series
 }
 
+func sevenSmoothComplementSeries(size int) []big.Int {
+	series := make([]big.Int, 0, size)
+	isSmooth := func(number int) bool {
+		for _, p := range primes {
+			for number%p == 0 {
+				number /= p
+			}
+		}
+		return number != 1
+	}
+	i := 1
+	for len(series) < size {
+		if isSmooth(i) {
+			smooth := big.Int{}
+			smooth.SetInt64(int64(i))
+			series = append(series, smooth)
+		}
+		i++
+	}
+	return series
+}
+
 func searchSeries() {
 	ga, err := eaopt.NewDefaultGAConfig().NewGA()
 	if err != nil {
@@ -483,6 +506,16 @@ func main() {
 			panic(err)
 		}
 
+		return
+	}
+	if *sevenComp {
+		series := sevenSmoothComplementSeries(512)
+		for _, number := range series {
+			fmt.Printf(" %s", number.String())
+		}
+		fmt.Printf("\n")
+		sum, product := sumProductTest(series)
+		fmt.Println(sum*sum + product*product)
 		return
 	}
 	if *search {

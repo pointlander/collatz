@@ -66,12 +66,12 @@ func (s BoolSlice) Evaluate() (float64, error) {
 	for i, value := range s {
 		if value {
 			number := big.Int{}
-			number.SetInt64(int64(i+1))
+			number.SetInt64(int64(i + 1))
 			series = append(series, number)
 		}
 	}
 	sum, product := sumProductTest(series)
-	score := math.Sqrt(sum * sum + product * product)
+	score := math.Sqrt(sum*sum + product*product)
 	return score, nil
 }
 
@@ -84,9 +84,9 @@ func (s BoolSlice) Crossover(r eaopt.Genome, rng *rand.Rand) {
 }
 
 func (s BoolSlice) Clone() eaopt.Genome {
-    r := make(BoolSlice, len(s))
-    copy(r, s)
-    return r
+	r := make(BoolSlice, len(s))
+	copy(r, s)
+	return r
 }
 
 func BoolSliceFactory(rng *rand.Rand) eaopt.Genome {
