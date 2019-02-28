@@ -410,6 +410,7 @@ func (s Source) graph(max int) {
 		i++
 	}
 
+	data := make([]Result, 0, max)
 	for i < max {
 		result := <-results
 		j--
@@ -418,6 +419,7 @@ func (s Source) graph(max int) {
 		}
 		points = append(points, plotter.XY{X: float64(result.Size), Y: result.Score})
 		fmt.Println(result.Size, result.Sum, result.Product, result.Score)
+		data = append(data, result)
 		go sample(i)
 		j++
 		i++
@@ -431,9 +433,27 @@ func (s Source) graph(max int) {
 		}
 		points = append(points, plotter.XY{X: float64(result.Size), Y: result.Score})
 		fmt.Println(result.Size, result.Sum, result.Product, result.Score)
-
+		data = append(data, result)
 	}
 	fmt.Println(minSize, minScore)
+
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].Size < data[j].Size
+	})
+	out, err := os.Create(fmt.Sprintf("%s.csv.gz", s.Key))
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	csv, err := gzip.NewWriterLevel(out, gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	defer csv.Close()
+	fmt.Fprintf(csv, "size, sum, product, score\n")
+	for _, item := range data {
+		fmt.Fprintf(csv, "%d, %g, %g, %g\n", item.Size, item.Sum, item.Product, item.Score)
+	}
 
 	p, err := plot.New()
 	if err != nil {
@@ -575,7 +595,7 @@ func main() {
 		sum, product := sumProductTest(series)
 		fmt.Println(math.Sqrt(sum*sum + product*product))
 
-		Registry["sevenSmoothComplement"].graph(512)
+		Registry["sevenSmoothComplement"].graph(2048)
 		return
 	}
 	if *search {
