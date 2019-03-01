@@ -30,6 +30,7 @@ import (
 )
 
 var (
+	zero  = big.NewInt(0)
 	one   = big.NewInt(1)
 	two   = big.NewInt(2)
 	three = big.NewInt(3)
@@ -520,6 +521,35 @@ func sumProductTest(series []big.Int) (float64, float64) {
 	return sumScore, productScore
 }
 
+func factor(a big.Int) []big.Int {
+	number, primes, x := big.Int{}, make([]big.Int, 0, 256), big.Int{}
+	number.Set(&a)
+
+	for x.Mod(&number, two).Cmp(zero) == 0 {
+		primes = append(primes, *two)
+		number.Div(&number, two)
+	}
+
+	i := big.NewInt(3)
+	for x.Mul(i, i).Cmp(&number) <= 0 {
+		for x.Mod(&number, i).Cmp(zero) == 0 {
+			y := big.Int{}
+			y.Set(i)
+			primes = append(primes, y)
+			number.Div(&number, i)
+		}
+		i.Add(i, two)
+	}
+
+	if number.Cmp(two) > 0 {
+		y := big.Int{}
+		y.Set(&number)
+		primes = append(primes, y)
+	}
+
+	return primes
+}
+
 func main() {
 	flag.Parse()
 
@@ -610,7 +640,12 @@ func main() {
 	}
 	series := collatz(&i)
 	for _, item := range series {
-		fmt.Println(&item)
+		fmt.Printf("%v [", &item)
+		factors := factor(item)
+		for _, f := range factors {
+			fmt.Printf("%v, ", &f)
+		}
+		fmt.Printf("]\n")
 	}
 	sumProductTest(series)
 }
