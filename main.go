@@ -583,13 +583,66 @@ func fibonacciSearch(x, y uint64) (int, *big.Int) {
 }
 
 func fibonacciGraph() {
-	primes, points := sieveOfEratosthenes(10000), make(plotter.XYs, 0, 256)
-	for i := range primes[:len(primes)-1] {
-		x, y := primes[i], primes[i+1]
-		fmt.Printf("%d %d", x, y)
+	type Result struct {
+		X, Y  uint64
+		Index int
+		GCM   *big.Int
+	}
+	cores := runtime.NumCPU() * 2
+	results := make(chan Result, cores)
+	factor := func(x, y uint64) {
 		index, gcm := fibonacciSearch(x, y)
-		fmt.Printf(" %d %v\n", index, gcm)
-		points = append(points, plotter.XY{X: float64(gcm.Uint64()), Y: float64(index)})
+		results <- Result{
+			X:     x,
+			Y:     y,
+			Index: index,
+			GCM:   gcm,
+		}
+	}
+
+	primes, data, routines := sieveOfEratosthenes(50000), make([]Result, 0, len(primes)-1), 0
+	for i := 0; i < len(primes)-1; {
+		if routines < cores {
+			x, y := primes[i], primes[i+1]
+			go factor(x, y)
+			routines++
+			i++
+			continue
+		}
+		result := <-results
+		data = append(data, result)
+		routines--
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCM)
+	}
+	for routines > 0 {
+		result := <-results
+		data = append(data, result)
+		routines--
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCM)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].X < data[j].X
+	})
+
+	out, err := os.Create(fmt.Sprintf("fibonacci.csv.gz"))
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	csv, err := gzip.NewWriterLevel(out, gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	defer csv.Close()
+	fmt.Fprintf(csv, "x, y, index, gcm\n")
+	for _, item := range data {
+		fmt.Fprintf(csv, "%d, %d, %d, %v\n", item.X, item.Y, item.Index, item.GCM)
+	}
+
+	points := make(plotter.XYs, 0, len(primes)-1)
+	for _, item := range data {
+		points = append(points, plotter.XY{X: float64(item.GCM.Uint64()), Y: float64(item.Index)})
 	}
 
 	p, err := plot.New()
