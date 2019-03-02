@@ -552,46 +552,56 @@ func factor(a big.Int) []big.Int {
 	return primes
 }
 
-func fibonacciSearch(x, y uint64) (int, *big.Int) {
-	base := big.NewInt(0)
-	base.SetUint64(x * y)
-	test := func(offset *big.Int) (bool, *big.Int) {
-		gcd, sum := big.Int{}, big.Int{}
-		sum.Add(base, offset)
-		if gcd.GCD(nil, nil, base, &sum).Cmp(one) > 0 {
-			return true, &gcd
-		}
-		return false, nil
-	}
+type Searcher func(x, y uint64) (int, *big.Int)
 
-	a, b, i := big.NewInt(0), big.NewInt(1), 0
-	//fmt.Println(a)
-	//fmt.Println(b)
-	if ok, gcd := test(b); ok {
-		return i, gcd
-	}
-	for {
-		c := big.NewInt(0)
-		c.Add(a, b)
-		a, b = b, c
-		//fmt.Println(c)
+func fibonacciSearch(i0, i1 int64) Searcher {
+	return func(x, y uint64) (int, *big.Int) {
+		base := big.NewInt(0)
+		base.SetUint64(x * y)
+		test := func(offset *big.Int) (bool, *big.Int) {
+			gcd, sum := big.Int{}, big.Int{}
+			sum.Add(base, offset)
+			if gcd.GCD(nil, nil, base, &sum).Cmp(one) > 0 {
+				return true, &gcd
+			}
+			return false, nil
+		}
+
+		a, b, i := big.NewInt(i0), big.NewInt(i1), 0
+		//fmt.Println(a)
+		//fmt.Println(b)
 		if ok, gcd := test(b); ok {
 			return i, gcd
 		}
-		i++
+		for {
+			c := big.NewInt(0)
+			c.Add(a, b)
+			a, b = b, c
+			//fmt.Println(c)
+			if ok, gcd := test(b); ok {
+				return i, gcd
+			}
+			i++
+		}
 	}
 }
 
-func fibonacciGraph() {
+func fibonacciGraph(name string, searchers []Searcher) {
 	type Result struct {
-		X, Y  uint64
-		Index int
-		GCM   *big.Int
+		X, Y, Index uint64
+		GCM         *big.Int
 	}
 	cores := runtime.NumCPU() * 2
 	results := make(chan Result, cores)
 	factor := func(x, y uint64) {
-		index, gcm := fibonacciSearch(x, y)
+		var index uint64 = math.MaxUint64
+		var gcm *big.Int
+		for _, searcher := range searchers {
+			i, g := searcher(x, y)
+			if uint64(i) < index {
+				index, gcm = uint64(i), g
+			}
+		}
 		results <- Result{
 			X:     x,
 			Y:     y,
@@ -625,7 +635,7 @@ func fibonacciGraph() {
 		return data[i].X < data[j].X
 	})
 
-	out, err := os.Create(fmt.Sprintf("fibonacci.csv.gz"))
+	out, err := os.Create(fmt.Sprintf("%s.csv.gz", name))
 	if err != nil {
 		panic(err)
 	}
@@ -650,7 +660,7 @@ func fibonacciGraph() {
 		panic(err)
 	}
 
-	p.Title.Text = fmt.Sprintf("factor vs index")
+	p.Title.Text = fmt.Sprintf("factor vs index for %s", name)
 	p.X.Label.Text = "factor"
 	p.Y.Label.Text = "index"
 
@@ -662,7 +672,7 @@ func fibonacciGraph() {
 	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
 	p.Add(scatter)
 
-	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("fibonacci.png"))
+	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("%s.png", name))
 	if err != nil {
 		panic(err)
 	}
@@ -767,7 +777,9 @@ func main() {
 	if *fibonacci {
 		//i, gcd := fibonacciSearch(99989, 99991)
 		//fmt.Println("found", gcd, i)
-		fibonacciGraph()
+		//fibonacciGraph("fibonacci", []Searcher{fibonacciSearch(0, 1)})
+		fibonacciGraph("lucas", []Searcher{fibonacciSearch(2, 1)})
+		//fibonacciGraph("combined", []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
 		return
 	}
 	if *printPrimes > 0 {
