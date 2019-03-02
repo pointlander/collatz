@@ -39,18 +39,20 @@ var (
 )
 
 var (
-	number     = flag.String("number", "13", "starting number")
-	brute      = flag.Bool("brute", false, "try a bunch of numbers")
-	aa         = flag.String("a", "2", "number series parameter")
-	bb         = flag.String("b", "3", "number series parameter")
-	arithmetic = flag.Bool("arithmetic", false, "use arithmetic integers for series")
-	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
-	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
-	random     = flag.Bool("random", false, "use random numbers for series")
-	seven      = flag.Bool("seven", false, "use seven smooth series")
-	sevenComp  = flag.Bool("sevenComp", false, "use seven smooth complement series")
-	oeis       = flag.Bool("oeis", false, "search through oeis")
-	search     = flag.Bool("search", false, "search for series")
+	number      = flag.String("number", "13", "starting number")
+	brute       = flag.Bool("brute", false, "try a bunch of numbers")
+	aa          = flag.String("a", "2", "number series parameter")
+	bb          = flag.String("b", "3", "number series parameter")
+	arithmetic  = flag.Bool("arithmetic", false, "use arithmetic integers for series")
+	geometric   = flag.Bool("geometric", false, "use geometric integers for series")
+	atomic      = flag.Bool("atomic", false, "use atomic neutron counts for series")
+	random      = flag.Bool("random", false, "use random numbers for series")
+	seven       = flag.Bool("seven", false, "use seven smooth series")
+	sevenComp   = flag.Bool("sevenComp", false, "use seven smooth complement series")
+	oeis        = flag.Bool("oeis", false, "search through oeis")
+	fibonacci   = flag.Bool("fibonacci", false, "fibonacci search")
+	printPrimes = flag.Uint64("primes", 0, "print the prime number out")
+	search      = flag.Bool("search", false, "search for series")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -550,6 +552,83 @@ func factor(a big.Int) []big.Int {
 	return primes
 }
 
+func fibonacciSearch(x, y uint64) (int, *big.Int) {
+	base := big.NewInt(0)
+	base.SetUint64(x * y)
+	test := func(offset *big.Int) (bool, *big.Int) {
+		gcd, sum := big.Int{}, big.Int{}
+		sum.Add(base, offset)
+		if gcd.GCD(nil, nil, base, &sum).Cmp(one) > 0 {
+			return true, &gcd
+		}
+		return false, nil
+	}
+
+	a, b, i := big.NewInt(0), big.NewInt(1), 0
+	//fmt.Println(a)
+	//fmt.Println(b)
+	if ok, gcd := test(b); ok {
+		return i, gcd
+	}
+	for {
+		c := big.NewInt(0)
+		c.Add(a, b)
+		a, b = b, c
+		//fmt.Println(c)
+		if ok, gcd := test(b); ok {
+			return i, gcd
+		}
+		i++
+	}
+}
+
+func fibonacciGraph() {
+	primes, points := sieveOfEratosthenes(10000), make(plotter.XYs, 0, 256)
+	for i := range primes[:len(primes)-1] {
+		x, y := primes[i], primes[i+1]
+		fmt.Printf("%d %d", x, y)
+		index, gcm := fibonacciSearch(x, y)
+		fmt.Printf(" %d %v\n", index, gcm)
+		points = append(points, plotter.XY{X: float64(gcm.Uint64()), Y: float64(index)})
+	}
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = fmt.Sprintf("factor vs index")
+	p.X.Label.Text = "factor"
+	p.Y.Label.Text = "index"
+
+	scatter, err := plotter.NewScatter(points)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("fibonacci.png"))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func sieveOfEratosthenes(n uint64) (primes []uint64) {
+	b := make([]bool, n)
+	for i := uint64(2); i < n; i++ {
+		if b[i] {
+			continue
+		}
+		primes = append(primes, i)
+		for j := i * i; j < n; j += i {
+			b[j] = true
+		}
+	}
+	return
+}
+
 func main() {
 	flag.Parse()
 
@@ -630,6 +709,20 @@ func main() {
 	}
 	if *search {
 		searchSeries()
+		return
+	}
+	if *fibonacci {
+		//i, gcd := fibonacciSearch(99989, 99991)
+		//fmt.Println("found", gcd, i)
+		fibonacciGraph()
+		return
+	}
+	if *printPrimes > 0 {
+		p := sieveOfEratosthenes(*printPrimes)
+		for _, i := range p {
+			fmt.Printf("%d ", i)
+		}
+		fmt.Printf("\n")
 		return
 	}
 
