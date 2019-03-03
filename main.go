@@ -586,7 +586,57 @@ func fibonacciSearch(i0, i1 int64) Searcher {
 	}
 }
 
-func fibonacciGraph(name string, searchers []Searcher) {
+type PrimeSource interface {
+	Next() (x, y uint64)
+	More() bool
+}
+
+type SequentialSource struct {
+	Primes []uint64
+	I      int
+}
+
+func NewSequentialSource(max uint64) *SequentialSource {
+	primes := sieveOfEratosthenes(max)
+	return &SequentialSource{
+		Primes: primes,
+	}
+}
+
+func (s *SequentialSource) Next() (x, y uint64) {
+	x, y = s.Primes[s.I], s.Primes[s.I+1]
+	s.I++
+	return
+}
+
+func (s *SequentialSource) More() bool {
+	return s.I < len(s.Primes)-1
+}
+
+type RandomSource struct {
+	Primes []uint64
+	I      int
+}
+
+func NewRandomSource(max uint64) *RandomSource {
+	primes := sieveOfEratosthenes(max)
+	return &RandomSource{
+		Primes: primes,
+	}
+}
+
+func (r *RandomSource) Next() (x, y uint64) {
+	length := len(r.Primes)
+	x, y = r.Primes[rand.Intn(length)], r.Primes[rand.Intn(length)]
+	r.I++
+	return
+}
+
+func (r *RandomSource) More() bool {
+	return r.I < len(r.Primes)-1
+}
+
+func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 	type Result struct {
 		X, Y, Index uint64
 		GCM         *big.Int
@@ -610,13 +660,11 @@ func fibonacciGraph(name string, searchers []Searcher) {
 		}
 	}
 
-	primes, data, routines := sieveOfEratosthenes(50000), make([]Result, 0, len(primes)-1), 0
-	for i := 0; i < len(primes)-1; {
+	data, routines := make([]Result, 0, len(primes)-1), 0
+	for source.More() {
 		if routines < cores {
-			x, y := primes[i], primes[i+1]
-			go factor(x, y)
+			go factor(source.Next())
 			routines++
-			i++
 			continue
 		}
 		result := <-results
@@ -777,9 +825,12 @@ func main() {
 	if *fibonacci {
 		//i, gcd := fibonacciSearch(99989, 99991)
 		//fmt.Println("found", gcd, i)
-		//fibonacciGraph("fibonacci", []Searcher{fibonacciSearch(0, 1)})
-		fibonacciGraph("lucas", []Searcher{fibonacciSearch(2, 1)})
-		//fibonacciGraph("combined", []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
+		//source := NewSequentialSource(50000)
+		//fibonacciGraph("fibonacci", source, []Searcher{fibonacciSearch(0, 1)})
+		source := NewRandomSource(50000)
+		fibonacciGraph("random", source, []Searcher{fibonacciSearch(0, 1)})
+		//fibonacciGraph("lucas", source, []Searcher{fibonacciSearch(2, 1)})
+		//fibonacciGraph("combined", source, []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
 		return
 	}
 	if *printPrimes > 0 {
