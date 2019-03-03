@@ -34,6 +34,9 @@ var (
 	one   = big.NewInt(1)
 	two   = big.NewInt(2)
 	three = big.NewInt(3)
+	fOne  = big.NewFloat(1)
+	fTwo  = big.NewFloat(2)
+	fFive = big.NewFloat(5)
 	a     = &big.Int{}
 	b     = &big.Int{}
 )
@@ -726,6 +729,48 @@ func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 	}
 }
 
+func binet(nn *big.Int) {
+	prec := uint(1024)
+	n := big.Int{}
+	n.Set(nn)
+
+	f1, p1 := big.Float{}, big.Float{}
+	f1.SetPrec(prec).Sqrt(fFive)
+	f1.Add(fOne, &f1)
+	p1.SetPrec(prec).Set(fOne)
+
+	f2, p2 := big.Float{}, big.Float{}
+	f2.SetPrec(prec).Sqrt(fFive)
+	f2.Sub(fOne, &f2)
+	p2.SetPrec(prec).Set(fOne)
+
+	f3, p3 := big.Float{}, big.Float{}
+	f3.SetPrec(prec).Set(fTwo)
+	p3.SetPrec(prec).Set(fOne)
+
+	for n.Cmp(zero) > 0 {
+		if n.Bit(0) == 1 {
+			p1.Mul(&p1, &f1)
+			p2.Mul(&p2, &f2)
+			p3.Mul(&p3, &f3)
+		}
+		f1.Mul(&f1, &f1)
+		f2.Mul(&f2, &f2)
+		f3.Mul(&f3, &f3)
+		n.Rsh(&n, 1)
+	}
+
+	f := big.Float{}
+	f.SetPrec(prec).Sub(&p1, &p2)
+	d := big.Float{}
+	d.SetPrec(prec).Sqrt(fFive)
+	d.Mul(&p3, &d)
+	f.Quo(&f, &d)
+	output := big.Int{}
+	f.Int(&output)
+	fmt.Println(&output)
+}
+
 func sieveOfEratosthenes(n uint64) (primes []uint64) {
 	b := make([]bool, n)
 	for i := uint64(2); i < n; i++ {
@@ -827,10 +872,13 @@ func main() {
 		//fmt.Println("found", gcd, i)
 		//source := NewSequentialSource(50000)
 		//fibonacciGraph("fibonacci", source, []Searcher{fibonacciSearch(0, 1)})
-		source := NewRandomSource(50000)
-		fibonacciGraph("random", source, []Searcher{fibonacciSearch(0, 1)})
+		//source := NewRandomSource(50000)
+		//fibonacciGraph("random", source, []Searcher{fibonacciSearch(0, 1)})
 		//fibonacciGraph("lucas", source, []Searcher{fibonacciSearch(2, 1)})
 		//fibonacciGraph("combined", source, []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
+		n := big.Int{}
+		n.SetString(*number, 10)
+		binet(&n)
 		return
 	}
 	if *printPrimes > 0 {
