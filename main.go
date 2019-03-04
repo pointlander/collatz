@@ -576,6 +576,7 @@ func fibonacciSearch(i0, i1 int64) Searcher {
 		if ok, gcd := test(b); ok {
 			return i, gcd
 		}
+		i++
 		for {
 			c := big.NewInt(0)
 			c.Add(a, b)
@@ -696,7 +697,7 @@ func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 		panic(err)
 	}
 	defer csv.Close()
-	fmt.Fprintf(csv, "x, y, index, gcm\n")
+	fmt.Fprintf(csv, "x, y, index, gcd\n")
 	for _, item := range data {
 		fmt.Fprintf(csv, "%d, %d, %d, %v\n", item.X, item.Y, item.Index, item.GCM)
 	}
