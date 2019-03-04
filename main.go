@@ -643,24 +643,24 @@ func (r *RandomSource) More() bool {
 func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 	type Result struct {
 		X, Y, Index uint64
-		GCM         *big.Int
+		GCD         *big.Int
 	}
 	cores := runtime.NumCPU() * 2
 	results := make(chan Result, cores)
 	factor := func(x, y uint64) {
 		var index uint64 = math.MaxUint64
-		var gcm *big.Int
+		var gcd *big.Int
 		for _, searcher := range searchers {
 			i, g := searcher(x, y)
 			if uint64(i) < index {
-				index, gcm = uint64(i), g
+				index, gcd = uint64(i), g
 			}
 		}
 		results <- Result{
 			X:     x,
 			Y:     y,
 			Index: index,
-			GCM:   gcm,
+			GCD:   gcd,
 		}
 	}
 
@@ -674,13 +674,13 @@ func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 		result := <-results
 		data = append(data, result)
 		routines--
-		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCM)
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCD)
 	}
 	for routines > 0 {
 		result := <-results
 		data = append(data, result)
 		routines--
-		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCM)
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCD)
 	}
 
 	sort.Slice(data, func(i, j int) bool {
@@ -699,12 +699,12 @@ func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 	defer csv.Close()
 	fmt.Fprintf(csv, "x, y, index, gcd\n")
 	for _, item := range data {
-		fmt.Fprintf(csv, "%d, %d, %d, %v\n", item.X, item.Y, item.Index, item.GCM)
+		fmt.Fprintf(csv, "%d, %d, %d, %v\n", item.X, item.Y, item.Index, item.GCD)
 	}
 
 	points := make(plotter.XYs, 0, len(primes)-1)
 	for _, item := range data {
-		points = append(points, plotter.XY{X: float64(item.GCM.Uint64()), Y: float64(item.Index)})
+		points = append(points, plotter.XY{X: float64(item.GCD.Uint64()), Y: float64(item.Index)})
 	}
 
 	p, err := plot.New()
@@ -727,6 +727,27 @@ func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
 	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("%s.png", name))
 	if err != nil {
 		panic(err)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return float64(data[i].GCD.Uint64())/float64(data[i].Index) < float64(data[j].GCD.Uint64())/float64(data[j].Index)
+	})
+
+	outCluster, err := os.Create(fmt.Sprintf("%s_cluster.csv.gz", name))
+	if err != nil {
+		panic(err)
+	}
+	defer outCluster.Close()
+	csvCluster, err := gzip.NewWriterLevel(outCluster, gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	defer csvCluster.Close()
+	fmt.Fprintf(csvCluster, "x, y, index, gcd, slope\n")
+	for _, item := range data {
+		fmt.Fprintf(csvCluster, "%d, %d, %d, %v, %f\n",
+			item.X, item.Y, item.Index, item.GCD,
+			float64(item.GCD.Uint64())/float64(item.Index))
 	}
 }
 
@@ -871,15 +892,16 @@ func main() {
 	if *fibonacci {
 		//i, gcd := fibonacciSearch(99989, 99991)
 		//fmt.Println("found", gcd, i)
-		//source := NewSequentialSource(50000)
-		//fibonacciGraph("fibonacci", source, []Searcher{fibonacciSearch(0, 1)})
+		source := NewSequentialSource(50000)
+		fibonacciGraph("fibonacci", source, []Searcher{fibonacciSearch(0, 1)})
 		//source := NewRandomSource(50000)
 		//fibonacciGraph("random", source, []Searcher{fibonacciSearch(0, 1)})
 		//fibonacciGraph("lucas", source, []Searcher{fibonacciSearch(2, 1)})
 		//fibonacciGraph("combined", source, []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
-		n := big.Int{}
-		n.SetString(*number, 10)
-		binet(&n)
+
+		//n := big.Int{}
+		//n.SetString(*number, 10)
+		//binet(&n)
 		return
 	}
 	if *printPrimes > 0 {
