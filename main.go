@@ -34,23 +34,28 @@ var (
 	one   = big.NewInt(1)
 	two   = big.NewInt(2)
 	three = big.NewInt(3)
+	fOne  = big.NewFloat(1)
+	fTwo  = big.NewFloat(2)
+	fFive = big.NewFloat(5)
 	a     = &big.Int{}
 	b     = &big.Int{}
 )
 
 var (
-	number     = flag.String("number", "13", "starting number")
-	brute      = flag.Bool("brute", false, "try a bunch of numbers")
-	aa         = flag.String("a", "2", "number series parameter")
-	bb         = flag.String("b", "3", "number series parameter")
-	arithmetic = flag.Bool("arithmetic", false, "use arithmetic integers for series")
-	geometric  = flag.Bool("geometric", false, "use geometric integers for series")
-	atomic     = flag.Bool("atomic", false, "use atomic neutron counts for series")
-	random     = flag.Bool("random", false, "use random numbers for series")
-	seven      = flag.Bool("seven", false, "use seven smooth series")
-	sevenComp  = flag.Bool("sevenComp", false, "use seven smooth complement series")
-	oeis       = flag.Bool("oeis", false, "search through oeis")
-	search     = flag.Bool("search", false, "search for series")
+	number      = flag.String("number", "13", "starting number")
+	brute       = flag.Bool("brute", false, "try a bunch of numbers")
+	aa          = flag.String("a", "2", "number series parameter")
+	bb          = flag.String("b", "3", "number series parameter")
+	arithmetic  = flag.Bool("arithmetic", false, "use arithmetic integers for series")
+	geometric   = flag.Bool("geometric", false, "use geometric integers for series")
+	atomic      = flag.Bool("atomic", false, "use atomic neutron counts for series")
+	random      = flag.Bool("random", false, "use random numbers for series")
+	seven       = flag.Bool("seven", false, "use seven smooth series")
+	sevenComp   = flag.Bool("sevenComp", false, "use seven smooth complement series")
+	oeis        = flag.Bool("oeis", false, "search through oeis")
+	fibonacci   = flag.Bool("fibonacci", false, "fibonacci search")
+	printPrimes = flag.Uint64("primes", 0, "print the prime number out")
+	search      = flag.Bool("search", false, "search for series")
 )
 
 func collatz(i *big.Int) []big.Int {
@@ -550,6 +555,258 @@ func factor(a big.Int) []big.Int {
 	return primes
 }
 
+type Searcher func(x, y uint64) (int, *big.Int)
+
+func fibonacciSearch(i0, i1 int64) Searcher {
+	return func(x, y uint64) (int, *big.Int) {
+		base := big.NewInt(0)
+		base.SetUint64(x * y)
+		test := func(offset *big.Int) (bool, *big.Int) {
+			gcd, sum := big.Int{}, big.Int{}
+			sum.Add(base, offset)
+			if gcd.GCD(nil, nil, base, &sum).Cmp(one) > 0 {
+				return true, &gcd
+			}
+			return false, nil
+		}
+
+		a, b, i := big.NewInt(i0), big.NewInt(i1), 0
+		//fmt.Println(a)
+		//fmt.Println(b)
+		if ok, gcd := test(b); ok {
+			return i, gcd
+		}
+		i++
+		for {
+			c := big.NewInt(0)
+			c.Add(a, b)
+			a, b = b, c
+			//fmt.Println(c)
+			if ok, gcd := test(b); ok {
+				return i, gcd
+			}
+			i++
+		}
+	}
+}
+
+type PrimeSource interface {
+	Next() (x, y uint64)
+	More() bool
+}
+
+type SequentialSource struct {
+	Primes []uint64
+	I      int
+}
+
+func NewSequentialSource(max uint64) *SequentialSource {
+	primes := sieveOfEratosthenes(max)
+	return &SequentialSource{
+		Primes: primes,
+	}
+}
+
+func (s *SequentialSource) Next() (x, y uint64) {
+	x, y = s.Primes[s.I], s.Primes[s.I+1]
+	s.I++
+	return
+}
+
+func (s *SequentialSource) More() bool {
+	return s.I < len(s.Primes)-1
+}
+
+type RandomSource struct {
+	Primes []uint64
+	I      int
+}
+
+func NewRandomSource(max uint64) *RandomSource {
+	primes := sieveOfEratosthenes(max)
+	return &RandomSource{
+		Primes: primes,
+	}
+}
+
+func (r *RandomSource) Next() (x, y uint64) {
+	length := len(r.Primes)
+	x, y = r.Primes[rand.Intn(length)], r.Primes[rand.Intn(length)]
+	r.I++
+	return
+}
+
+func (r *RandomSource) More() bool {
+	return r.I < len(r.Primes)-1
+}
+
+func fibonacciGraph(name string, source PrimeSource, searchers []Searcher) {
+	type Result struct {
+		X, Y, Index uint64
+		GCD         *big.Int
+	}
+	cores := runtime.NumCPU() * 2
+	results := make(chan Result, cores)
+	factor := func(x, y uint64) {
+		var index uint64 = math.MaxUint64
+		var gcd *big.Int
+		for _, searcher := range searchers {
+			i, g := searcher(x, y)
+			if uint64(i) < index {
+				index, gcd = uint64(i), g
+			}
+		}
+		results <- Result{
+			X:     x,
+			Y:     y,
+			Index: index,
+			GCD:   gcd,
+		}
+	}
+
+	data, routines := make([]Result, 0, len(primes)-1), 0
+	for source.More() {
+		if routines < cores {
+			go factor(source.Next())
+			routines++
+			continue
+		}
+		result := <-results
+		data = append(data, result)
+		routines--
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCD)
+	}
+	for routines > 0 {
+		result := <-results
+		data = append(data, result)
+		routines--
+		fmt.Printf("%d %d %d %v\n", result.X, result.Y, result.Index, result.GCD)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return data[i].X < data[j].X
+	})
+
+	out, err := os.Create(fmt.Sprintf("%s.csv.gz", name))
+	if err != nil {
+		panic(err)
+	}
+	defer out.Close()
+	csv, err := gzip.NewWriterLevel(out, gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	defer csv.Close()
+	fmt.Fprintf(csv, "x, y, index, gcd\n")
+	for _, item := range data {
+		fmt.Fprintf(csv, "%d, %d, %d, %v\n", item.X, item.Y, item.Index, item.GCD)
+	}
+
+	points := make(plotter.XYs, 0, len(primes)-1)
+	for _, item := range data {
+		points = append(points, plotter.XY{X: float64(item.GCD.Uint64()), Y: float64(item.Index)})
+	}
+
+	p, err := plot.New()
+	if err != nil {
+		panic(err)
+	}
+
+	p.Title.Text = fmt.Sprintf("factor vs index for %s", name)
+	p.X.Label.Text = "factor"
+	p.Y.Label.Text = "index"
+
+	scatter, err := plotter.NewScatter(points)
+	if err != nil {
+		panic(err)
+	}
+	scatter.GlyphStyle.Radius = vg.Length(1)
+	scatter.GlyphStyle.Shape = draw.CircleGlyph{}
+	p.Add(scatter)
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, fmt.Sprintf("%s.png", name))
+	if err != nil {
+		panic(err)
+	}
+
+	sort.Slice(data, func(i, j int) bool {
+		return float64(data[i].GCD.Uint64())/float64(data[i].Index) < float64(data[j].GCD.Uint64())/float64(data[j].Index)
+	})
+
+	outCluster, err := os.Create(fmt.Sprintf("%s_cluster.csv.gz", name))
+	if err != nil {
+		panic(err)
+	}
+	defer outCluster.Close()
+	csvCluster, err := gzip.NewWriterLevel(outCluster, gzip.BestCompression)
+	if err != nil {
+		panic(err)
+	}
+	defer csvCluster.Close()
+	fmt.Fprintf(csvCluster, "x, y, index, gcd, slope\n")
+	for _, item := range data {
+		fmt.Fprintf(csvCluster, "%d, %d, %d, %v, %f\n",
+			item.X, item.Y, item.Index, item.GCD,
+			float64(item.GCD.Uint64())/float64(item.Index))
+	}
+}
+
+func binet(nn *big.Int) {
+	prec := uint(1024)
+	n := big.Int{}
+	n.Set(nn)
+
+	f1, p1 := big.Float{}, big.Float{}
+	f1.SetPrec(prec).Sqrt(fFive)
+	f1.Add(fOne, &f1)
+	p1.SetPrec(prec).Set(fOne)
+
+	f2, p2 := big.Float{}, big.Float{}
+	f2.SetPrec(prec).Sqrt(fFive)
+	f2.Sub(fOne, &f2)
+	p2.SetPrec(prec).Set(fOne)
+
+	f3, p3 := big.Float{}, big.Float{}
+	f3.SetPrec(prec).Set(fTwo)
+	p3.SetPrec(prec).Set(fOne)
+
+	for n.Cmp(zero) > 0 {
+		if n.Bit(0) == 1 {
+			p1.Mul(&p1, &f1)
+			p2.Mul(&p2, &f2)
+			p3.Mul(&p3, &f3)
+		}
+		f1.Mul(&f1, &f1)
+		f2.Mul(&f2, &f2)
+		f3.Mul(&f3, &f3)
+		n.Rsh(&n, 1)
+	}
+
+	f := big.Float{}
+	f.SetPrec(prec).Sub(&p1, &p2)
+	d := big.Float{}
+	d.SetPrec(prec).Sqrt(fFive)
+	d.Mul(&p3, &d)
+	f.Quo(&f, &d)
+	output := big.Int{}
+	f.Int(&output)
+	fmt.Println(&output)
+}
+
+func sieveOfEratosthenes(n uint64) (primes []uint64) {
+	b := make([]bool, n)
+	for i := uint64(2); i < n; i++ {
+		if b[i] {
+			continue
+		}
+		primes = append(primes, i)
+		for j := i * i; j < n; j += i {
+			b[j] = true
+		}
+	}
+	return
+}
+
 func main() {
 	flag.Parse()
 
@@ -630,6 +887,29 @@ func main() {
 	}
 	if *search {
 		searchSeries()
+		return
+	}
+	if *fibonacci {
+		//i, gcd := fibonacciSearch(99989, 99991)
+		//fmt.Println("found", gcd, i)
+		source := NewSequentialSource(50000)
+		fibonacciGraph("fibonacci", source, []Searcher{fibonacciSearch(0, 1)})
+		//source := NewRandomSource(50000)
+		//fibonacciGraph("random", source, []Searcher{fibonacciSearch(0, 1)})
+		//fibonacciGraph("lucas", source, []Searcher{fibonacciSearch(2, 1)})
+		//fibonacciGraph("combined", source, []Searcher{fibonacciSearch(0, 1), fibonacciSearch(2, 1)})
+
+		//n := big.Int{}
+		//n.SetString(*number, 10)
+		//binet(&n)
+		return
+	}
+	if *printPrimes > 0 {
+		p := sieveOfEratosthenes(*printPrimes)
+		for _, i := range p {
+			fmt.Printf("%d ", i)
+		}
+		fmt.Printf("\n")
 		return
 	}
 
