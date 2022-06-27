@@ -928,4 +928,24 @@ func main() {
 		fmt.Printf("]\n")
 	}
 	sumProductTest(series)
+
+	found := make(map[string]bool)
+	j := big.Int{}
+	for i := 1; i < 1e5; i++ {
+		j.SetInt64(int64(i))
+		series := collatz(&j)
+		for _, item := range series {
+			found[item.String()] = true
+		}
+		count := 0
+		for k := 1; k < i; k++ {
+			j.SetInt64(int64(k))
+			if !found[j.String()] {
+				count++
+			}
+		}
+		if count > 0 {
+			fmt.Println(i, count)
+		}
+	}
 }
