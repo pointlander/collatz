@@ -25,6 +25,7 @@ import (
 	"github.com/MaxHalford/eaopt"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
 )
@@ -931,7 +932,7 @@ func main() {
 
 	found := make(map[string]bool)
 	j := big.Int{}
-	for i := 1; i < 1e5; i++ {
+	for i := 1; i < 1e3; i++ {
 		j.SetInt64(int64(i))
 		series := collatz(&j)
 		for _, item := range series {
@@ -947,5 +948,51 @@ func main() {
 		if count > 0 {
 			fmt.Println(i, count)
 		}
+	}
+
+	groupA := plotter.Values{20, 35, 30, 35, 27}
+	groupB := plotter.Values{25, 32, 34, 20, 25}
+	groupC := plotter.Values{12, 28, 15, 21, 8}
+
+	p, _ := plot.New()
+
+	p.Title.Text = "Bar chart"
+	p.Y.Label.Text = "Heights"
+
+	w := vg.Points(20)
+
+	barsA, err := plotter.NewBarChart(groupA, w)
+	if err != nil {
+		panic(err)
+	}
+	barsA.LineStyle.Width = vg.Length(0)
+	barsA.Color = plotutil.Color(0)
+	barsA.Offset = -w
+
+	barsB, err := plotter.NewBarChart(groupB, w)
+	if err != nil {
+		panic(err)
+	}
+	barsB.LineStyle.Width = vg.Length(0)
+	barsB.Color = plotutil.Color(1)
+
+	barsC, err := plotter.NewBarChart(groupC, w)
+	if err != nil {
+		panic(err)
+	}
+	barsC.LineStyle.Width = vg.Length(0)
+	barsC.Color = plotutil.Color(2)
+	barsC.Offset = w
+
+	p.Add(barsA, barsB, barsC)
+	p.Legend.Add("Group A", barsA)
+	p.Legend.Add("Group B", barsB)
+	p.Legend.Add("Group C", barsC)
+	p.Legend.Top = true
+	p.NominalX("One", "Two", "Three", "Four", "Five")
+
+	err = p.Save(8*vg.Inch, 8*vg.Inch, "barchart.png")
+	if err != nil {
+		panic(err)
 	}
 }
