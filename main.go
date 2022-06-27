@@ -23,9 +23,9 @@ import (
 	"strings"
 
 	"github.com/MaxHalford/eaopt"
+	"github.com/VividCortex/gohistogram"
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/plotutil"
 	"gonum.org/v1/plot/vg"
 	"gonum.org/v1/plot/vg/draw"
 )
@@ -950,49 +950,29 @@ func main() {
 		}
 	}
 
-	groupA := plotter.Values{20, 35, 30, 35, 27}
-	groupB := plotter.Values{25, 32, 34, 20, 25}
-	groupC := plotter.Values{12, 28, 15, 21, 8}
-
-	p, _ := plot.New()
-
-	p.Title.Text = "Bar chart"
-	p.Y.Label.Text = "Heights"
-
-	w := vg.Points(20)
-
-	barsA, err := plotter.NewBarChart(groupA, w)
-	if err != nil {
-		panic(err)
+	histogram := make(map[int]int)
+	h := gohistogram.NewHistogram(100)
+	for i := 2; i < 1024*1024*1024; i += 2 {
+		count, number := 0, i
+		for number&1 == 0 {
+			count++
+			number >>= 1
+		}
+		histogram[count]++
+		h.Add(float64(count))
 	}
-	barsA.LineStyle.Width = vg.Length(0)
-	barsA.Color = plotutil.Color(0)
-	barsA.Offset = -w
-
-	barsB, err := plotter.NewBarChart(groupB, w)
-	if err != nil {
-		panic(err)
+	fmt.Println(h.String())
+	max := 0
+	for key := range histogram {
+		if key > max {
+			max = key
+		}
 	}
-	barsB.LineStyle.Width = vg.Length(0)
-	barsB.Color = plotutil.Color(1)
-
-	barsC, err := plotter.NewBarChart(groupC, w)
-	if err != nil {
-		panic(err)
+	values := make([]int, max+1)
+	for key, value := range histogram {
+		values[key] = value
 	}
-	barsC.LineStyle.Width = vg.Length(0)
-	barsC.Color = plotutil.Color(2)
-	barsC.Offset = w
-
-	p.Add(barsA, barsB, barsC)
-	p.Legend.Add("Group A", barsA)
-	p.Legend.Add("Group B", barsB)
-	p.Legend.Add("Group C", barsC)
-	p.Legend.Top = true
-	p.NominalX("One", "Two", "Three", "Four", "Five")
-
-	err = p.Save(8*vg.Inch, 8*vg.Inch, "barchart.png")
-	if err != nil {
-		panic(err)
+	for key, value := range values {
+		fmt.Println(key, value)
 	}
 }
