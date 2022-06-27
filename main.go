@@ -949,7 +949,11 @@ func main() {
 			fmt.Println(i, count)
 		}
 	}
+	even()
+	odd()
+}
 
+func even() {
 	histogram := make(map[int]int)
 	h := gohistogram.NewHistogram(100)
 	for i := 2; i < 1024*1024*1024; i += 2 {
@@ -973,6 +977,34 @@ func main() {
 		values[key] = value
 	}
 	for key, value := range values {
-		fmt.Println(key, value)
+		fmt.Println(key, float64(value)/(1024*1024*1024))
+	}
+}
+
+func odd() {
+	histogram := make(map[int]int)
+	h := gohistogram.NewHistogram(100)
+	for i := 1; i < 1024*1024*1024; i += 2 {
+		count, number := 0, 3*i+1
+		for number&1 == 0 {
+			count++
+			number >>= 1
+		}
+		histogram[count]++
+		h.Add(float64(count))
+	}
+	fmt.Println(h.String())
+	max := 0
+	for key := range histogram {
+		if key > max {
+			max = key
+		}
+	}
+	values := make([]int, max+1)
+	for key, value := range histogram {
+		values[key] = value
+	}
+	for key, value := range values {
+		fmt.Println(key, float64(value)/(1024*1024*1024))
 	}
 }
