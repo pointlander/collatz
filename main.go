@@ -977,7 +977,7 @@ func even() {
 		values[key] = value
 	}
 	for key, value := range values {
-		fmt.Println(key, float64(value)/(1024*1024*1024))
+		fmt.Println(key, 2*float64(value)/(1024*1024*1024))
 	}
 }
 
@@ -1005,6 +1005,6 @@ func odd() {
 		values[key] = value
 	}
 	for key, value := range values {
-		fmt.Println(key, float64(value)/(1024*1024*1024))
+		fmt.Println(key, 2*float64(value)/(1024*1024*1024))
 	}
 }
