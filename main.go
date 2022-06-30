@@ -1004,7 +1004,14 @@ func odd() {
 	for key, value := range histogram {
 		values[key] = value
 	}
+	factor, total, sum := 2.0, 0.0, 0.0
+	for _, value := range values {
+		sum += float64(value)
+		total += factor * float64(value)
+		factor *= 2
+	}
 	for key, value := range values {
 		fmt.Println(key, 2*float64(value)/(1024*1024*1024))
 	}
+	fmt.Println(total / sum)
 }
